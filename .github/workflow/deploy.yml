@@ -1,0 +1,88 @@
+name: Deploy FastAPI to GCP VM
+
+on:
+  push:
+    branches:
+      - main
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Authenticate to Google cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+        
+      - name: Get VM External IP
+        id: get_ip
+        run: |
+          IP=$(gcloud compute instances describe ${{ secrets.GCP_VM_NAME }} --zone=${{ secrets.GCP_VM_ZONE }} --format='get(networkInterfaces[0].accessConfigs[0].natIP)') 
+          echo "vm_ip=$IP" >> $GITHUB_OUTPUT
+      
+      - name: Deploy to GCP VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ steps.get ip.outputs.vm_ip }}
+          username: ${{ secrets.GCP_VM_USERNAME }}
+          key: ${{ secrets.GCP_VM_SSH_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -e
+            
+            APP_DIR="/home/${{ secrets.GCP_VM_USERNAME }}/fastapi_demo_app"
+            SERVICE_NAME="fastapi"
+            SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+            REPO_URL=https://github.com/Dharshini-K123/gcpgithub 
+            
+            mkdir -p $APP_DIR
+            cd $APP_DIR
+            
+            if [ ! -d ".git" ]; then
+              git init
+              git remote add origin "$REPO_URL"
+            else
+              git remote set-url origin "$REPO_URL"
+            fi 
+            
+            git fetch origin
+            git reset --hard origin/main
+            
+            if [ ! -d "venv "]; then
+              python3 -m venv venv
+            fi
+            
+            source venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            
+            sudo tee "$SERVICE_FILE" > /dev/null << EOF
+            [Unit]
+            Description=FastAPI Demo Service 
+            After=network.target
+            
+            [Service]
+            User=${{ secrets.GCP_VM_USERNAME }}
+            WorkingDirectory=$APP_DIR
+            ExecStart=${APP_DIR}/venv/bin/uvicorn app.main:app -host 0.0.0.0 --port 8000
+            Restart=always
+            RestartSec=5
+            Evironment=PATH=${APP_DIR}/venv/bin
+            
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+            
+            sudo systemctl daemon-reload
+            sudo systemctl enable $SERVICE_NAME
+            sudo systemctl restart $SERVICE_NAME
+            sudo systemctl status $SERVICE_NAME --no-pager
+
