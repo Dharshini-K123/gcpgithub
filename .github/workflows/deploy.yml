@@ -30,7 +30,7 @@ jobs:
       - name: Deploy to GCP VM
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ steps.get ip.outputs.vm_ip }}
+          host: ${{ steps.get_ip.outputs.vm_ip }}
           username: ${{ secrets.GCP_VM_USERNAME }}
           key: ${{ secrets.GCP_VM_SSH_KEY }}
           port: 22
