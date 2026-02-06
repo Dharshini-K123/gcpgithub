@@ -1,4 +1,4 @@
-name: Deploy to cloud run
+name: Deploy to Cloud run
 on: 
   push:
     branches:
