@@ -64,7 +64,7 @@ jobs:
       - name: Push Docker Image
         run: |
           docker push ${{ steps.image-tag.outputs.tag }}
-          docker push ${{ steps.image-tag.outputs.tag-sha }}
+          docker push ${{ steps.image-tag.outputs.tag_sha }}
       
       - name: Deploy to cloud run
         run: |
