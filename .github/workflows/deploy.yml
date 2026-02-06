@@ -41,7 +41,7 @@ jobs:
           if ! gcloud container clusters describe $CLUSTER_NAME --zone $ZONE; then
             gcloud container clusters create $CLUSTER_NAME \
               --zone $ZONE \
-              --num-nodes 2
+              --num-nodes 2 \
               --machine-type e2-medium
           else
             echo "Cluster $CLUSTER_NAME already exists."
