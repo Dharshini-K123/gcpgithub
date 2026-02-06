@@ -49,9 +49,14 @@ jobs:
       - name: Set Image tag 
         id: image-tag
         run: |
-          echo "tags=${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo:latest" >> $GITHUB_OUTPUT
-          echo "tags_sha=${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo:${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "tag=${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo:latest" >> $GITHUB_OUTPUT
+          echo "tag_sha=${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo:${{ github.sha }}" >> $GITHUB_OUTPUT
       
+      - name: Debug image tags
+        run: |
+          echo "TAG=${{ steps.image-tag.outputs.tag }}"
+          echo "TAG_SHA=${{ steps.image-tag.outputs.tag_sha }}"
+
       - name: Build Docker Image
         run: |
           docker build -t ${{ steps.image-tag.outputs.tag }} -t ${{ steps.image-tag.outputs.tag_sha }} -f Dockerfile .
