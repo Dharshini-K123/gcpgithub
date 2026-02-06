@@ -68,7 +68,7 @@ jobs:
       
       - name: Deploy to cloud run
         run: |
-          gcloud run deploy demo --image ${{ steps.image-tag.outputs.tag }} --region ${GCP_REGION} --platform managed --allow-unauthenticated --port 8080 \
+          gcloud run deploy demo --image ${{ steps.image-tag.outputs.tag }} --region ${GCP_REGION} --platform managed --allow-unauthenticated --port 8000 \
           --cpu 1 --memory 512Mi --max-instances 5 --timeout 300s --quiet
       
       - name: Get URL 
