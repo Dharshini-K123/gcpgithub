@@ -1,82 +1,71 @@
-name: Deploy to Cloud run
-on: 
+name: Deploy FastAPI to GKE-CI/CD
+on:
   push:
-    branches:
-      - master
-      - main 
-      - develop
-  pull_request:
-    branches:
-      - master
-      - main
-      - develop
-  workflow_dispatch:
-    inputs:
-      environments:
-        description: 'Deployment environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod 
+    branches: [ main ]
 env:
-  GCP_REGION: europe-west1
+  GCP_REGION: europe-west1 
   ARTIFACT_REGISTRY: demo-repo
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code 
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Authenticate to google cloud
+
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      
-      - name: Set up gcloud CLI
+
+      - name: Set up GCloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-      
-      - name: Configure docker for Google Artifact ARTIFACT_REGISTRY
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Install GKE GCloud auth plugin
+        run: | 
+         gcloud components install gke-gcloud-auth-plugin --quiet
+
+      - name: Configure Docker for Google Artifact Registry
         run: |
           gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
-      
-      - name: Set Image tag 
+
+      - name: Create Cluster
+        run: |
+          CLUSTER_NAME=demo-cluster
+          ZONE=europe-west1-b
+          if ! gcloud container clusters describe $CLUSTER_NAME --zone $ZONE; then
+            gcloud container clusters create $CLUSTER_NAME \
+              --zone $ZONE \
+              --num-nodes 2
+              --machine-type e2-medium
+          else
+            echo "Cluster $CLUSTER_NAME already exists."
+          fi
+      - name: Set Image tag
         id: image-tag
         run: |
-          echo "tag=${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo:latest" >> $GITHUB_OUTPUT
-          echo "tag_sha=${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo:${{ github.sha }}" >> $GITHUB_OUTPUT
+          IMAGE_PATH="${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REGISTRY}/demo-repo"
+          echo "tag=${IMAGE_PATH}:latest" >> $GITHUB_OUTPUT
+          echo "tag-sha=${IMAGE_PATH}:${{ github.sha }}" >> $GITHUB_OUTPUT
       
-      - name: Debug image tags
-        run: |
-          echo "TAG=${{ steps.image-tag.outputs.tag }}"
-          echo "TAG_SHA=${{ steps.image-tag.outputs.tag_sha }}"
-
       - name: Build Docker Image
         run: |
-          docker build --tag ${{ steps.image-tag.outputs.tag }} --tag ${{ steps.image-tag.outputs.tag_sha }} --file Dockerfile .
-      
+          docker build \
+            --tag ${{ steps.image-tag.outputs.tag }} \
+            --tag ${{ steps.image-tag.outputs.tag-sha }} \
+            --file Dockerfile .
+
       - name: Push Docker Image
         run: |
           docker push ${{ steps.image-tag.outputs.tag }}
-          docker push ${{ steps.image-tag.outputs.tag_sha }}
-      
-      - name: Deploy to cloud run
+          docker push ${{ steps.image-tag.outputs.tag-sha }}
+
+      - name: Deploy to GKE
         run: |
-          gcloud run deploy demo --image ${{ steps.image-tag.outputs.tag }} --region ${GCP_REGION} --platform managed --allow-unauthenticated --port 8000 \
-          --cpu 1 --memory 512Mi --max-instances 5 --timeout 500s --quiet
-      
-      - name: Get URL 
-        id: get-url
-        run: |
-          URL=$(gcloud run services describe demo --region ${GCP_REGION} --platform managed --format='value(status.url)')
-          echo "URL=$URL" >> $GITHUB_OUTPUT
-      
-      - name: Verify Deployment
-        run: |
-          curl -f ${{ steps.get-url.outputs.URL }} || exit 1
+          gcloud container cluster get-credentials demo-cluster --zone europe-west1-b --project ${{ secrets.GCP_PROJECT_ID }}
+          kubectl apply -f k8s/k8s-deployment.yaml
