@@ -22,8 +22,8 @@ on:
           - staging
           - prod 
 env:
-  GCP_REGION:europe-west1
-  ARTIFACT_REGISTRY:demo-repo
+  GCP_REGION: europe-west1
+  ARTIFACT_REGISTRY: demo-repo
 
 jobs:
   deploy:
